@@ -2,12 +2,15 @@
 海报生成算法服务
 支持 LLM API 调用、模板管理、海报渲染、图片处理、多格式导出
 如果 LLM API 不可用，自动降级到 dummy 模式
+海报与上传图片持久化到磁盘，重启不丢失
 """
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+import hashlib
 import os
 import json
-from io import BytesIO
+import re
+import uuid
 from dotenv import load_dotenv
 
 from llm_service import LLMService
@@ -26,8 +29,17 @@ template_service = TemplateService()
 poster_renderer = PosterRenderer()
 image_service = ImageService()
 
-# 存储生成的海报（实际应该使用数据库或对象存储）
-poster_storage = {}
+# 持久化目录（与 docker-compose volumes 对应）
+POSTERS_DIR = os.environ.get('POSTERS_DIR', '/tmp/posters')
+UPLOADS_DIR = os.environ.get('UPLOADS_DIR', '/tmp/uploads')
+os.makedirs(POSTERS_DIR, exist_ok=True)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+# 仅允许字母数字与下划线，防止路径穿越
+def _safe_id(raw_id: str) -> str:
+    if not raw_id or not re.match(r'^[a-zA-Z0-9_\-]+$', raw_id):
+        return ''
+    return raw_id
 
 
 def get_dummy_response(prompt: str) -> dict:
@@ -104,6 +116,18 @@ def generate_poster():
             # 1. 调用 LLM 生成设计方案
             design = llm_service.generate_poster_design(prompt)
             
+            # 兜底：若 LLM 返回占位文案或空标题，用用户输入作为标题，保证每次输入不同则海报不同
+            _placeholder_titles = ('', '标题内容', '标题', '海报主标题', '主标题', '根据用户需求写的标题', '与上面 title 一致的具体标题文案')
+            raw_title = (design.get('title') or '').strip()
+            if not raw_title or raw_title in _placeholder_titles:
+                design['title'] = prompt[:80] if isinstance(prompt, str) else str(prompt)[:80]
+                for el in design.get('elements') or []:
+                    if el.get('id') == 'title' and (not (el.get('content') or '').strip() or (el.get('content') or '').strip() in _placeholder_titles):
+                        el['content'] = design['title']
+                # 占位时按 prompt 轮换模板，使不同输入至少版式不同（用 md5 保证同输入同模板）
+                _tpls = ('template_001', 'template_002', 'template_003')
+                design['template_id'] = _tpls[int(hashlib.md5(prompt.encode()).hexdigest(), 16) % 3]
+            
             # 2. 获取模板
             template_id = design.get('template_id', 'template_001')
             template = template_service.get_template(template_id)
@@ -118,15 +142,15 @@ def generate_poster():
             # 4. 渲染海报
             poster_image = poster_renderer.render(poster_data, format='PNG')
             
-            # 5. 保存海报（实际应该上传到对象存储）
-            poster_id = f"poster_{len(poster_storage)}"
-            poster_storage[poster_id] = {
-                'poster_data': poster_data,
-                'image_data': poster_image.read()
-            }
-            poster_image.seek(0)
+            # 5. 持久化到磁盘（重启不丢失）
+            poster_id = uuid.uuid4().hex
+            poster_png_path = os.path.join(POSTERS_DIR, f"{poster_id}.png")
+            poster_json_path = os.path.join(POSTERS_DIR, f"{poster_id}.json")
+            with open(poster_png_path, 'wb') as f:
+                f.write(poster_image.read())
+            with open(poster_json_path, 'w', encoding='utf-8') as f:
+                json.dump(poster_data, f, ensure_ascii=False, indent=2)
             
-            # 生成海报 URL（实际应该返回对象存储 URL）
             poster_url = f"/api/poster/{poster_id}/image"
             
             return jsonify({
@@ -192,19 +216,16 @@ def upload_image():
         
         # 处理图片
         processed_image = image_service.process_image(
-            file_data, 
+            file_data,
             file.filename
         )
         
-        # 保存图片（实际应该上传到对象存储）
-        image_id = f"image_{len(poster_storage)}"
-        poster_storage[image_id] = {
-            'image_data': processed_image.read(),
-            'filename': file.filename
-        }
-        processed_image.seek(0)
+        # 持久化到磁盘
+        image_id = uuid.uuid4().hex
+        image_path = os.path.join(UPLOADS_DIR, f"{image_id}.jpg")
+        with open(image_path, 'wb') as f:
+            f.write(processed_image.read())
         
-        # 返回图片 URL
         image_url = f"/api/image/{image_id}"
         
         return jsonify({
@@ -221,13 +242,17 @@ def upload_image():
 def get_poster(poster_id):
     """获取海报数据"""
     try:
-        if poster_id not in poster_storage:
+        pid = _safe_id(poster_id)
+        if not pid:
+            return jsonify({'error': 'Invalid poster id'}), 400
+        json_path = os.path.join(POSTERS_DIR, f"{pid}.json")
+        if not os.path.isfile(json_path):
             return jsonify({'error': 'Poster not found'}), 404
-        
-        poster = poster_storage[poster_id]
+        with open(json_path, 'r', encoding='utf-8') as f:
+            poster_data = json.load(f)
         return jsonify({
             'poster_id': poster_id,
-            'poster_data': poster.get('poster_data', {})
+            'poster_data': poster_data
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -237,22 +262,24 @@ def get_poster(poster_id):
 def update_poster(poster_id):
     """更新海报内容"""
     try:
+        pid = _safe_id(poster_id)
+        if not pid:
+            return jsonify({'error': 'Invalid poster id'}), 400
         data = request.get_json()
         poster_data = data.get('poster_data')
-        
         if not poster_data:
             return jsonify({'error': 'poster_data is required'}), 400
         
-        # 重新渲染海报
+        poster_json_path = os.path.join(POSTERS_DIR, f"{pid}.json")
+        if not os.path.isfile(poster_json_path):
+            return jsonify({'error': 'Poster not found'}), 404
+        
         poster_image = poster_renderer.render(poster_data, format='PNG')
-        
-        # 更新存储
-        if poster_id not in poster_storage:
-            poster_storage[poster_id] = {}
-        
-        poster_storage[poster_id]['poster_data'] = poster_data
-        poster_storage[poster_id]['image_data'] = poster_image.read()
-        poster_image.seek(0)
+        poster_png_path = os.path.join(POSTERS_DIR, f"{pid}.png")
+        with open(poster_png_path, 'wb') as f:
+            f.write(poster_image.read())
+        with open(poster_json_path, 'w', encoding='utf-8') as f:
+            json.dump(poster_data, f, ensure_ascii=False, indent=2)
         
         return jsonify({
             'poster_id': poster_id,
@@ -260,7 +287,6 @@ def update_poster(poster_id):
             'poster_data': poster_data,
             'message': 'Poster updated successfully'
         }), 200
-        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -269,15 +295,14 @@ def update_poster(poster_id):
 def get_poster_image(poster_id):
     """获取海报图片"""
     try:
-        if poster_id not in poster_storage:
+        pid = _safe_id(poster_id)
+        if not pid:
+            return jsonify({'error': 'Invalid poster id'}), 400
+        png_path = os.path.join(POSTERS_DIR, f"{pid}.png")
+        if not os.path.isfile(png_path):
             return jsonify({'error': 'Poster not found'}), 404
-        
-        image_data = poster_storage[poster_id].get('image_data')
-        if not image_data:
-            return jsonify({'error': 'Image not found'}), 404
-        
         return send_file(
-            BytesIO(image_data),
+            png_path,
             mimetype='image/png',
             as_attachment=False
         )
@@ -289,17 +314,17 @@ def get_poster_image(poster_id):
 def export_poster(poster_id):
     """导出海报（支持多种格式）"""
     try:
-        if poster_id not in poster_storage:
+        pid = _safe_id(poster_id)
+        if not pid:
+            return jsonify({'error': 'Invalid poster id'}), 400
+        json_path = os.path.join(POSTERS_DIR, f"{pid}.json")
+        if not os.path.isfile(json_path):
             return jsonify({'error': 'Poster not found'}), 404
+        with open(json_path, 'r', encoding='utf-8') as f:
+            poster_data = json.load(f)
         
         data = request.get_json() or {}
         format_type = data.get('format', 'png').lower()
-        
-        poster_data = poster_storage[poster_id].get('poster_data')
-        if not poster_data:
-            return jsonify({'error': 'Poster data not found'}), 404
-        
-        # 根据格式渲染
         if format_type == 'pdf':
             output = poster_renderer.render_to_pdf(poster_data)
             mimetype = 'application/pdf'
@@ -308,7 +333,7 @@ def export_poster(poster_id):
             output = poster_renderer.render(poster_data, format='JPEG')
             mimetype = 'image/jpeg'
             filename = f'poster_{poster_id}.jpg'
-        else:  # png
+        else:
             output = poster_renderer.render(poster_data, format='PNG')
             mimetype = 'image/png'
             filename = f'poster_{poster_id}.png'
@@ -319,7 +344,6 @@ def export_poster(poster_id):
             as_attachment=True,
             download_name=filename
         )
-        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -328,15 +352,14 @@ def export_poster(poster_id):
 def get_image(image_id):
     """获取上传的图片"""
     try:
-        if image_id not in poster_storage:
+        iid = _safe_id(image_id)
+        if not iid:
+            return jsonify({'error': 'Invalid image id'}), 400
+        image_path = os.path.join(UPLOADS_DIR, f"{iid}.jpg")
+        if not os.path.isfile(image_path):
             return jsonify({'error': 'Image not found'}), 404
-        
-        image_data = poster_storage[image_id].get('image_data')
-        if not image_data:
-            return jsonify({'error': 'Image data not found'}), 404
-        
         return send_file(
-            BytesIO(image_data),
+            image_path,
             mimetype='image/jpeg',
             as_attachment=False
         )

@@ -5,6 +5,69 @@ import { removeToken, getUser } from '../utils/auth'
 import ThreadList from './ThreadList'
 import './Chat.css'
 
+// 后端代理路径为 /api/poster/image/:id；历史数据可能存成算法格式 /api/poster/:id/image，需统一
+function normalizePosterUrl(url) {
+  if (!url || typeof url !== 'string') return url
+  if (/^\/api\/poster\/image\/[^/]+$/.test(url)) return url
+  const m = url.match(/^\/api\/poster\/([^/]+)\/image$/)
+  if (m) return `/api/poster/image/${m[1]}`
+  return url
+}
+
+// 带认证请求的海报图片：<img src="..."> 不会带 JWT，需用 api 拉取 blob 再显示；外部 URL 直接显示
+function PosterImage({ posterUrl, alt, title }) {
+  const [imageSrc, setImageSrc] = useState(null)
+  const [loading, setLoading] = useState(!!posterUrl)
+  const [error, setError] = useState(null)
+  const objectUrlRef = useRef(null)
+
+  const url = normalizePosterUrl(posterUrl)
+  const isExternalUrl = url && (url.startsWith('http://') || url.startsWith('https://'))
+
+  useEffect(() => {
+    if (!url) {
+      setLoading(false)
+      return
+    }
+    // 外部 URL（如 dummy 占位图）直接使用，不需要带 token 请求
+    if (isExternalUrl) {
+      setImageSrc(url)
+      setLoading(false)
+      return
+    }
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current)
+      objectUrlRef.current = null
+    }
+    setImageSrc(null)
+    setLoading(true)
+    setError(null)
+    const path = url.startsWith('/api') ? url.slice(4) : url
+    api.get(path, { responseType: 'blob' })
+      .then((res) => {
+        const url = URL.createObjectURL(res.data)
+        objectUrlRef.current = url
+        setImageSrc(url)
+        setLoading(false)
+      })
+      .catch((err) => {
+        setError(err.response?.status === 401 ? '请重新登录' : '图片加载失败')
+        setLoading(false)
+      })
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current)
+        objectUrlRef.current = null
+      }
+    }
+  }, [url, isExternalUrl])
+
+  if (loading) return <div className="poster-loading">加载中...</div>
+  if (error) return <div className="poster-error">{error}</div>
+  if (!imageSrc) return null
+  return <img src={imageSrc} alt={alt || ''} title={title || ''} />
+}
+
 function Chat() {
   const [threads, setThreads] = useState([])
   const [currentThreadId, setCurrentThreadId] = useState(null)
@@ -299,10 +362,10 @@ function Chat() {
                       <p>{msg.text}</p>
                       {msg.posterUrl && (
                         <div className="poster-preview">
-                          <img 
-                            src={msg.posterUrl} 
-                            alt={msg.posterTitle || msg.text || "Generated poster"} 
-                            title={msg.posterTitle || msg.text || "Generated poster"}
+                          <PosterImage
+                            posterUrl={msg.posterUrl}
+                            alt={msg.posterTitle || msg.text || 'Generated poster'}
+                            title={msg.posterTitle || msg.text || 'Generated poster'}
                           />
                         </div>
                       )}

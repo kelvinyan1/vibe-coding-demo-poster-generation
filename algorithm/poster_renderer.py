@@ -73,21 +73,21 @@ class PosterRenderer:
             self._draw_gradient(img, colors[0], colors[1])
     
     def _draw_gradient(self, img: Image, color1: str, color2: str):
-        """绘制渐变背景"""
+        """绘制渐变背景（垂直渐变，用条带缩放避免逐像素循环）"""
         width, height = img.size
-        
-        # 简单的垂直渐变
+        r1, g1, b1 = self._hex_to_rgb(color1)
+        r2, g2, b2 = self._hex_to_rgb(color2)
+        # 画 1 列 x height 的渐变条，再缩放到整张图
+        strip = Image.new("RGB", (1, height))
+        strip_px = strip.load()
         for y in range(height):
-            ratio = y / height
-            r1, g1, b1 = self._hex_to_rgb(color1)
-            r2, g2, b2 = self._hex_to_rgb(color2)
-            
-            r = int(r1 + (r2 - r1) * ratio)
-            g = int(g1 + (g2 - g1) * ratio)
-            b = int(b1 + (b2 - b1) * ratio)
-            
-            for x in range(width):
-                img.putpixel((x, y), (r, g, b))
+            ratio = (y / (height - 1)) if height > 1 else 0
+            strip_px[0, y] = (
+                int(r1 + (r2 - r1) * ratio),
+                int(g1 + (g2 - g1) * ratio),
+                int(b1 + (b2 - b1) * ratio),
+            )
+        img.paste(strip.resize((width, height), Image.Resampling.LANCZOS), (0, 0))
     
     def _draw_text(self, draw: ImageDraw, element: Dict[str, Any]):
         """绘制文字"""
@@ -103,17 +103,36 @@ class PosterRenderer:
         # 字体大小
         font_size = style.get("fontSize", 24)
         
-        # 尝试加载字体
-        try:
-            # 使用默认字体
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
-        except:
+        # 优先使用支持中文的字体（路径需与 Docker/系统安装一致，否则会乱码/方框）
+        _env_font = os.environ.get("POSTER_FONT_PATH")
+        _font_paths = []
+        if _env_font and os.path.exists(_env_font):
+            _font_paths.append(_env_font)
+        _font_paths += [
+            "/usr/share/fonts/wenquanyi/wqy-zenhei/wqy-zenhei.ttc",  # Debian/Ubuntu fonts-wqy-zenhei
+            "/usr/share/fonts/truetype/wqy-zenhei/wqy-zenhei.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "C:/Windows/Fonts/msyh.ttc",
+            "C:/Windows/Fonts/simhei.ttf",
+        ]
+        font = None
+        for path in _font_paths:
+            if not os.path.exists(path):
+                continue
             try:
-                # Windows 字体
-                font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", font_size)
-            except:
-                # 使用默认字体
-                font = ImageFont.load_default()
+                # .ttc 需显式 index=0，否则部分环境会乱码
+                kw = {"size": font_size}
+                if path.lower().endswith(".ttc"):
+                    kw["index"] = 0
+                font = ImageFont.truetype(path, **kw)
+                break
+            except (OSError, IOError):
+                continue
+        if font is None:
+            font = ImageFont.load_default()
         
         # 颜色
         color = style.get("color", "#000000")

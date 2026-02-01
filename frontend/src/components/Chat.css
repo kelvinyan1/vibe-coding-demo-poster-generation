@@ -163,6 +163,20 @@
   display: block;
 }
 
+.poster-loading,
+.poster-error {
+  padding: 24px;
+  text-align: center;
+  color: #666;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.poster-error {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
 .loading {
   color: #666;
   font-style: italic;

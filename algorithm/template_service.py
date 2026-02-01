@@ -175,38 +175,46 @@ class TemplateService:
         ]
     
     def apply_design_to_template(self, template: Dict[str, Any], design: Dict[str, Any]) -> Dict[str, Any]:
-        """将设计应用到模板"""
+        """将设计应用到模板（含 LLM 返回的 elements：content / position / style）"""
         # 复制模板
         poster_data = json.loads(json.dumps(template))
         
-        # 应用设计中的内容
+        # 1. 应用顶层 title / subtitle / description（兼容只返回字段的 LLM）
         if "title" in design:
             for element in poster_data["elements"]:
                 if element["id"] == "title":
                     element["content"] = design["title"]
-                    if "style" in design.get("elements", []):
-                        # 应用样式
-                        pass
-        
         if "subtitle" in design:
             for element in poster_data["elements"]:
                 if element["id"] == "subtitle":
                     element["content"] = design.get("subtitle", "")
-        
         if "description" in design:
             for element in poster_data["elements"]:
                 if element["id"] == "description":
                     element["content"] = design.get("description", "")
         
-        # 应用配色方案
+        # 2. 应用 LLM 返回的 elements（按 id 覆盖 content / position / style）
+        design_elements = design.get("elements") or []
+        by_id = {el["id"]: el for el in design_elements if el.get("id")}
+        for element in poster_data["elements"]:
+            eid = element.get("id")
+            if eid not in by_id:
+                continue
+            de = by_id[eid]
+            if "content" in de:
+                element["content"] = de["content"]
+            if "position" in de and isinstance(de["position"], dict):
+                element["position"] = {**element.get("position", {}), **de["position"]}
+            if "style" in de and isinstance(de["style"], dict):
+                element["style"] = {**element.get("style", {}), **de["style"]}
+        
+        # 3. 应用配色方案
         if "color_scheme" in design:
             poster_data["color_scheme"] = design["color_scheme"]
-            # 更新背景色
-            if "background" in poster_data:
-                if poster_data["background"]["type"] == "gradient":
-                    poster_data["background"]["colors"] = [
-                        design["color_scheme"]["primary"],
-                        design["color_scheme"]["secondary"]
-                    ]
+            if "background" in poster_data and poster_data["background"]["type"] == "gradient":
+                cs = design["color_scheme"]
+                primary = cs.get("primary", "#4A90E2")
+                secondary = cs.get("secondary", "#FFFFFF")
+                poster_data["background"]["colors"] = [primary, secondary]
         
         return poster_data

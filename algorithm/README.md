@@ -64,3 +64,11 @@ python app.py
 # 生产模式（Docker）
 docker-compose up algorithm
 ```
+
+## 设计说明与扩展
+
+- **核心流程**：用户输入 → LLM 生成设计方案（JSON）→ 选模板 → 应用设计 → Pillow 渲染 → 持久化/返回。
+- **LLM 选型**：当前支持通义/智谱/百度；可扩展 OpenAI 或自部署（Llama/Qwen 等）。环境变量见 `.env.example`。
+- **模板**：`template_service.py` 中默认 3 个模板（竖版/横版/方形），元素含 id、type、position、style、defaultContent；扩展可加 JSON 配置或数据库表。
+- **导出**：PNG/JPEG 由 Pillow 渲染，PDF 由 reportlab；可扩展 SVG 或对象存储上传。
+- **扩展优先级**：前端海报编辑（拖拽/样式）→ 模板管理界面 → 更复杂模板或图像生成。

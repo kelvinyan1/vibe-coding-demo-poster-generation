@@ -69,38 +69,13 @@
 
 ### 自定义密码配置
 
-如需使用自定义数据库密码（推荐用于生产环境）：
+默认数据库密码为 `poster_password`，需与 `backend/.env` 的 `DB_PASSWORD` 一致。如需自定义（推荐生产环境）：
 
-1. **复制示例文件**：
-   ```bash
-   cp docker-compose.override.yml.example docker-compose.override.yml
-   ```
+1. 复制 `docker-compose.override.yml.example` 为 `docker-compose.override.yml`
+2. 在 override 中设置 `POSTGRES_PASSWORD: ${DB_PASSWORD:-你的密码}`
+3. 在 `backend/.env` 中设置相同的 `DB_PASSWORD`
 
-2. **编辑 `docker-compose.override.yml`**，设置你的密码：
-   ```yaml
-   services:
-     database:
-       environment:
-         POSTGRES_PASSWORD: ${DB_PASSWORD:-your-strong-password-here}
-   ```
-
-3. **设置环境变量**（可选）：
-   ```bash
-   # Windows PowerShell
-   $env:DB_PASSWORD="your-strong-password"
-   
-   # Linux/Mac
-   export DB_PASSWORD="your-strong-password"
-   ```
-
-4. **确保后端 `.env` 文件中的密码一致**：
-   ```bash
-   DB_PASSWORD=your-strong-password-here
-   ```
-
-**注意**：`docker-compose.override.yml` 不会被提交到 Git，每个人可以有自己的配置。
-
-详细配置说明请查看 [SECURITY.md](./SECURITY.md)
+详细说明见 [SECURITY.md](./SECURITY.md)。
 
 ## ✨ 已实现功能
 
@@ -110,21 +85,22 @@
 - ✅ 对话历史记录
 - ✅ 海报预览
 - ✅ 服务容错处理
+- ✅ 算法：LLM 国内 API（通义/智谱）、模板库、设计应用到模板（含 LLM elements）
+- ✅ 海报渲染（Pillow，渐变优化）、多格式导出（PNG/JPEG/PDF）
+- ✅ 图片上传与处理
+- ✅ 海报与上传图片持久化到磁盘（重启不丢失）
 
 ## 📋 待实现功能
 
-- [ ] 真实的海报生成算法
-- [ ] 海报模板库
-- [ ] 文字编辑和样式调整
-- [ ] 图片上传和处理
-- [ ] 多格式导出
+- [ ] 模板库管理界面
+- [ ] 可选：更复杂模板或图像生成扩展
 
 ## 🛠️ 技术栈
 
 - **前端**: React 18 + Vite + React Router
 - **后端**: Node.js + Express + PostgreSQL
 - **数据库**: PostgreSQL (Docker)
-- **算法服务**: Python Flask (Docker，当前为 dummy 版本)
+- **算法服务**: Python Flask (Docker)，LLM 国内 API、模板渲染、磁盘持久化
 
 ## 📁 项目结构
 
@@ -134,25 +110,15 @@ vibe-coding-demo-poster-generation/
 ├── backend/           # 后端服务
 ├── algorithm/         # 算法模块
 ├── docker-compose.yml # Docker 配置
-├── process/           # 开发过程记录
-│   ├── conversation_log.md    # 讨论记录
-│   └── develop_log.md         # 开发进度
-└── README.md
+├── process/
+│   └── DEV_LOG.md     # 开发进度与讨论记录（合并）
+├── README.md
+└── SECURITY.md        # 安全与部署说明
 ```
-
-## 🔧 故障排查
-
-- **Docker 连接失败**: 启动 Docker Desktop 后重新运行 `docker-compose up -d`
-- **数据库连接失败**: 检查 `.env` 文件配置，确保密码与 docker-compose.yml 一致
-- **端口冲突**: 修改对应配置文件中的端口设置
-- **详细故障排查**: 查看各子目录的 README.md 或 [SECURITY.md](./SECURITY.md)
 
 ## 📝 开发记录
 
-所有开发过程中的讨论和进度都记录在 [`process/`](./process/) 目录中：
-
-- [`conversation_log.md`](./process/conversation_log.md) - 与 AI 的讨论摘要
-- [`develop_log.md`](./process/develop_log.md) - 详细的开发进度
+开发进度与讨论记录见 [process/DEV_LOG.md](./process/DEV_LOG.md)。
 
 ## 📄 License
 
@@ -160,4 +126,4 @@ vibe-coding-demo-poster-generation/
 
 ---
 
-**当前状态**: 🟢 核心功能已完成，算法服务待实现真实生成逻辑
+**当前状态**: 🟢 核心功能与算法服务（LLM + 模板 + 持久化）已完成，可按需扩展编辑与模板管理

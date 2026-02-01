@@ -5,8 +5,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安装 curl 用于健康检查
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# 安装 curl 与中文字体（文泉驿），用于健康检查与海报中文渲染
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    fontconfig \
+    fonts-wqy-zenhei \
+    && fc-cache -f \
+    && rm -rf /var/lib/apt/lists/*
+# 文泉驿安装路径（Debian/Ubuntu）: /usr/share/fonts/wenquanyi/wqy-zenhei/wqy-zenhei.ttc
 
 # 安装依赖
 COPY requirements.txt .

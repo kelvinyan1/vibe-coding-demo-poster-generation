@@ -45,24 +45,26 @@ router.post('/generate', async (req, res) => {
     // 调用算法服务
     const algorithmResult = await callAlgorithmService(prompt);
 
+    // 统一转为后端代理路径 /api/poster/image/:posterId（前端与对话历史都用这个格式）
+    let finalPosterUrl = convertPosterUrl(algorithmResult.poster_url) || algorithmResult.poster_url;
+
     // 保存到数据库
     let posterId = null;
     if (isConnected()) {
       try {
         const result = await query(
           'INSERT INTO posters (user_id, conversation_id, prompt, poster_url, poster_data) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-          [userId, conversation_id || null, prompt, algorithmResult.poster_url, JSON.stringify(algorithmResult.poster_data)]
+          [userId, conversation_id || null, prompt, finalPosterUrl, JSON.stringify(algorithmResult.poster_data)]
         );
         posterId = result.rows[0].id;
 
-        // 如果有 conversation_id，更新对话响应，并更新主题更新时间
+        // 对话历史里也存代理路径，刷新页面后前端请求 /api/poster/image/:id 才能命中
         if (conversation_id) {
+          const responseForHistory = { ...algorithmResult, poster_url: finalPosterUrl };
           await query(
             'UPDATE conversations SET response = $1 WHERE id = $2',
-            [JSON.stringify(algorithmResult), conversation_id]
+            [JSON.stringify(responseForHistory), conversation_id]
           );
-          
-          // 更新主题的更新时间
           const threadResult = await query(
             'SELECT thread_id FROM conversations WHERE id = $1',
             [conversation_id]
@@ -76,24 +78,6 @@ router.post('/generate', async (req, res) => {
         }
       } catch (dbError) {
         console.error('Database save error:', dbError);
-        // 即使数据库保存失败，也返回结果
-      }
-    }
-
-    // 处理 poster_url：如果是相对路径，转换为后端代理路径
-    let finalPosterUrl = algorithmResult.poster_url;
-    if (finalPosterUrl && finalPosterUrl.startsWith('/api/poster/')) {
-      // 提取 poster_id，转换为后端代理路径
-      const posterIdMatch = finalPosterUrl.match(/\/api\/poster\/([^\/]+)\/image/);
-      if (posterIdMatch) {
-        finalPosterUrl = `/api/poster/image/${posterIdMatch[1]}`;
-        // 同时更新数据库中保存的 URL
-        if (posterId) {
-          await query(
-            'UPDATE posters SET poster_url = $1 WHERE id = $2',
-            [finalPosterUrl, posterId]
-          );
-        }
       }
     }
 
@@ -165,15 +149,18 @@ router.get('/image/:posterId', async (req, res) => {
         timeout: 10000
       });
       
-      // 设置响应头
       res.setHeader('Content-Type', response.headers['content-type'] || 'image/png');
       res.setHeader('Cache-Control', 'public, max-age=3600');
-      
-      // 转发图片流
       response.data.pipe(res);
     } catch (error) {
-      console.error('Failed to fetch image from algorithm service:', error.message);
-      res.status(404).json({ error: 'Image not found' });
+      const status = error.response?.status;
+      const msg = error.code === 'ECONNREFUSED'
+        ? '算法服务未启动或不可达，请检查 docker/algorithm 是否在运行'
+        : status === 404
+          ? '海报不存在（可能为旧数据 poster_0 等，算法已改为 uuid 持久化）'
+          : error.message;
+      console.error('Proxy image failed:', posterId, status || error.code, msg);
+      res.status(status === 404 ? 404 : 502).json({ error: 'Image not found' });
     }
   } catch (error) {
     console.error('Proxy image error:', error);

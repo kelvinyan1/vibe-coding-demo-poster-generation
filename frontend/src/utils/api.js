@@ -24,10 +24,7 @@ api.interceptors.request.use(
 
 // 响应拦截器 - 处理错误
 api.interceptors.response.use(
-  (response) => {
-    console.log('API Response:', response.config.url, response.status, response.data)
-    return response
-  },
+  (response) => response,
   (error) => {
     console.error('API Error:', error.config?.url, error.response?.status, error.response?.data)
     if (error.response?.status === 401) {

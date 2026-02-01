@@ -30,14 +30,11 @@ function Login(props) {
 
     try {
       const endpoint = isLogin ? '/auth/login' : '/auth/register'
-      console.log('Sending request to:', endpoint, formData)
       const response = await api.post(endpoint, formData)
-      console.log('Response received:', response.data)
       
       if (response.data.token && response.data.user) {
         setToken(response.data.token)
         setUser(response.data.user)
-        console.log('Token and user saved, navigating to /chat')
         // 先更新父组件的认证状态
         if (props.onLogin) {
           props.onLogin()

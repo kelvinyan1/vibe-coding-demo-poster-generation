@@ -83,13 +83,15 @@ class LLMService:
         if not self.is_available():
             raise Exception("LLM API not available")
         
-        system_prompt = """你是一个专业的海报设计师。根据用户需求，生成详细的海报设计方案。
-请返回 JSON 格式，包含以下字段：
+        system_prompt = """你是一个专业的海报设计师。根据用户的具体需求，生成海报设计方案。
+重要：title、subtitle、description 必须根据用户输入来写，不能使用示例占位文字（如"标题内容"、"海报主标题"）。每条用户需求都要得到不同的、与之对应的文案。
+template_id 根据内容选择：template_001 活动/竖版、template_002 产品/横版、template_003 节日/方形。color_scheme 的 primary/secondary 可根据主题换不同颜色（如节日用红金、产品用蓝白）。
+请只返回一个 JSON 对象，不要其他说明。格式如下：
 {
-    "title": "海报主标题",
-    "subtitle": "副标题（可选）",
-    "description": "描述文字（可选）",
-    "template_id": "template_001",
+    "title": "根据用户需求写的标题",
+    "subtitle": "根据用户需求写的副标题",
+    "description": "根据用户需求写的描述",
+    "template_id": "template_001 或 template_002 或 template_003",
     "color_scheme": {
         "primary": "#4A90E2",
         "secondary": "#FFFFFF",
@@ -100,20 +102,12 @@ class LLMService:
         {
             "id": "title",
             "type": "text",
-            "content": "标题内容",
+            "content": "与上面 title 一致的具体标题文案",
             "position": {"x": 400, "y": 200},
-            "style": {
-                "fontSize": 48,
-                "fontWeight": "bold",
-                "color": "#FFFFFF",
-                "textAlign": "center"
-            }
+            "style": {"fontSize": 48, "fontWeight": "bold", "color": "#FFFFFF", "textAlign": "center"}
         }
     ]
-}
-
-布局类型：vertical（竖版）、horizontal（横版）、square（方形）
-模板 ID：template_001（活动海报-竖版）、template_002（产品海报-横版）、template_003（节日海报-方形）"""
+}"""
         
         try:
             if self.provider == 'dashscope':

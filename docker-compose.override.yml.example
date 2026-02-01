@@ -1,0 +1,8 @@
+# 本地开发环境变量覆盖文件
+# 复制此文件为 docker-compose.override.yml 并设置你的密码
+# docker-compose.override.yml 不会被提交到 Git
+
+services:
+  database:
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-your-strong-password-here}

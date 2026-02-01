@@ -1,0 +1,49 @@
+services:
+  # 数据库服务
+  database:
+    image: postgres:15-alpine
+    container_name: poster-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-poster_db}
+      POSTGRES_USER: ${DB_USER:-poster_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-poster_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/src/config/db-init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poster_user -d poster_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - poster-network
+
+  # 算法服务
+  algorithm:
+    build:
+      context: ./algorithm
+      dockerfile: Dockerfile
+    container_name: poster-algorithm
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - poster-network
+    depends_on:
+      database:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+
+networks:
+  poster-network:
+    driver: bridge

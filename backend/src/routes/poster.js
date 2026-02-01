@@ -80,10 +80,27 @@ router.post('/generate', async (req, res) => {
       }
     }
 
+    // 处理 poster_url：如果是相对路径，转换为后端代理路径
+    let finalPosterUrl = algorithmResult.poster_url;
+    if (finalPosterUrl && finalPosterUrl.startsWith('/api/poster/')) {
+      // 提取 poster_id，转换为后端代理路径
+      const posterIdMatch = finalPosterUrl.match(/\/api\/poster\/([^\/]+)\/image/);
+      if (posterIdMatch) {
+        finalPosterUrl = `/api/poster/image/${posterIdMatch[1]}`;
+        // 同时更新数据库中保存的 URL
+        if (posterId) {
+          await query(
+            'UPDATE posters SET poster_url = $1 WHERE id = $2',
+            [finalPosterUrl, posterId]
+          );
+        }
+      }
+    }
+
     res.json({
       id: posterId,
       prompt: prompt,
-      poster_url: algorithmResult.poster_url,
+      poster_url: finalPosterUrl,
       poster_data: algorithmResult.poster_data,
       message: isConnected() ? 'Poster generated successfully' : 'Poster generated (database unavailable)'
     });
@@ -92,6 +109,18 @@ router.post('/generate', async (req, res) => {
     res.status(500).json({ error: 'Failed to generate poster' });
   }
 });
+
+// 转换 poster_url 为后端代理路径的辅助函数
+function convertPosterUrl(url) {
+  if (!url) return url;
+  if (url.startsWith('/api/poster/') && url.includes('/image')) {
+    const posterIdMatch = url.match(/\/api\/poster\/([^\/]+)\/image/);
+    if (posterIdMatch) {
+      return `/api/poster/image/${posterIdMatch[1]}`;
+    }
+  }
+  return url;
+}
 
 // 获取用户的海报列表
 router.get('/list', async (req, res) => {
@@ -106,12 +135,49 @@ router.get('/list', async (req, res) => {
       [userId]
     );
 
+    // 转换所有 poster_url
+    const posters = result.rows.map(poster => ({
+      ...poster,
+      poster_url: convertPosterUrl(poster.poster_url)
+    }));
+
     res.json({
-      posters: result.rows
+      posters: posters
     });
   } catch (error) {
     console.error('Get poster list error:', error);
     res.status(500).json({ error: 'Failed to get poster list' });
+  }
+});
+
+// 代理算法服务的图片请求
+router.get('/image/:posterId', async (req, res) => {
+  try {
+    const { posterId } = req.params;
+    const algorithmUrl = process.env.ALGORITHM_SERVICE_URL || 'http://localhost:8000';
+    
+    // 转发请求到算法服务
+    const imageUrl = `${algorithmUrl}/poster/${posterId}/image`;
+    
+    try {
+      const response = await axios.get(imageUrl, {
+        responseType: 'stream',
+        timeout: 10000
+      });
+      
+      // 设置响应头
+      res.setHeader('Content-Type', response.headers['content-type'] || 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      
+      // 转发图片流
+      response.data.pipe(res);
+    } catch (error) {
+      console.error('Failed to fetch image from algorithm service:', error.message);
+      res.status(404).json({ error: 'Image not found' });
+    }
+  } catch (error) {
+    console.error('Proxy image error:', error);
+    res.status(500).json({ error: 'Failed to proxy image' });
   }
 });
 

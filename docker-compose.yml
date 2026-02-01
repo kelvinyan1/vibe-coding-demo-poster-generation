@@ -30,6 +30,14 @@ services:
       - "8000:8000"
     environment:
       - PORT=8000
+      - LLM_PROVIDER=${LLM_PROVIDER:-dashscope}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-qwen-turbo}
+      - LLM_BASE_URL=${LLM_BASE_URL:-}
+      - BAIDU_SECRET_KEY=${BAIDU_SECRET_KEY:-}
+    volumes:
+      - algorithm_uploads:/tmp/uploads
+      - algorithm_posters:/tmp/posters
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -43,6 +51,8 @@ services:
 
 volumes:
   postgres_data:
+  algorithm_uploads:
+  algorithm_posters:
 
 networks:
   poster-network:

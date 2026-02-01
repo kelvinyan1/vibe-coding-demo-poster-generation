@@ -93,11 +93,51 @@ function Chat() {
             }
           }
 
+          // 查找关联的海报，获取标题
+          let posterTitle = null
+          const relatedPoster = posters.find(p => {
+            // 通过 conversation_id 关联
+            return p.conversation_id === conv.id
+          })
+          
+          if (relatedPoster) {
+            // 优先使用 poster_data 中的标题
+            let posterData = relatedPoster.poster_data
+            if (typeof posterData === 'string') {
+              try {
+                posterData = JSON.parse(posterData)
+              } catch (e) {
+                posterData = null
+              }
+            }
+            
+            if (posterData?.elements) {
+              const titleElement = posterData.elements.find(el => el.id === 'title')
+              if (titleElement?.content) {
+                posterTitle = titleElement.content
+              }
+            }
+            
+            // 如果没有标题，使用 prompt
+            if (!posterTitle && relatedPoster.prompt) {
+              posterTitle = relatedPoster.prompt
+            }
+          }
+          
+          // 如果还是没有，尝试从 responseData 中获取
+          if (!posterTitle && typeof responseData === 'object' && responseData.poster_data) {
+            const titleElement = responseData.poster_data.elements?.find(el => el.id === 'title')
+            if (titleElement?.content) {
+              posterTitle = titleElement.content
+            }
+          }
+
           messageList.push({
             id: `response-${conv.id}`,
             type: 'assistant',
             text: typeof responseData === 'string' ? responseData : responseData.message || '海报已生成',
             posterUrl: typeof responseData === 'object' ? responseData.poster_url : null,
+            posterTitle: posterTitle,
             isPoster: true,
             conversationId: conv.id,
             timestamp: conv.created_at
@@ -161,12 +201,22 @@ function Chat() {
 
       const poster = posterResponse.data
 
+      // 提取海报标题
+      let posterTitle = userMessage
+      if (poster.poster_data?.elements) {
+        const titleElement = poster.poster_data.elements.find(el => el.id === 'title')
+        if (titleElement?.content) {
+          posterTitle = titleElement.content
+        }
+      }
+
       // 添加助手响应
       const assistantMessage = {
         id: `response-${conversationId}`,
         type: 'assistant',
         text: `海报已生成！${poster.poster_data?.message || ''}`,
         posterUrl: poster.poster_url,
+        posterTitle: posterTitle,
         isPoster: true,
         conversationId: conversationId,
         timestamp: new Date().toISOString()
@@ -249,7 +299,11 @@ function Chat() {
                       <p>{msg.text}</p>
                       {msg.posterUrl && (
                         <div className="poster-preview">
-                          <img src={msg.posterUrl} alt="Generated poster" />
+                          <img 
+                            src={msg.posterUrl} 
+                            alt={msg.posterTitle || msg.text || "Generated poster"} 
+                            title={msg.posterTitle || msg.text || "Generated poster"}
+                          />
                         </div>
                       )}
                     </div>

@@ -1,8 +1,17 @@
 # 本地开发环境变量覆盖文件
-# 复制此文件为 docker-compose.override.yml 并设置你的密码
+# 复制此文件为 docker-compose.override.yml 并设置你的配置
 # docker-compose.override.yml 不会被提交到 Git
 
 services:
   database:
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-your-strong-password-here}
+
+  algorithm:
+    environment:
+      # LLM API 配置
+      LLM_PROVIDER: dashscope
+      LLM_API_KEY: -your-api-key
+      LLM_MODEL: qwen-turbo
+      LLM_BASE_URL: -your-base-url
+      BAIDU_SECRET_KEY: ""

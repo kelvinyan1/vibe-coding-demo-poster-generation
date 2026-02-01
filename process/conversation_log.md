@@ -69,3 +69,11 @@
 **用户**: 我在前端看到 "Database service unavailable"，是否是因为我没有重启数据库？
 
 **cursor auto**: 检查发现数据库容器在运行，但后端显示 disconnected。改进了数据库连接检查逻辑，添加了自动重连机制。发现问题是密码认证失败，原因是缺少 backend/.env 文件。数据库容器使用默认密码 poster_password，需要创建 .env 文件配置相同的密码。如果数据库之前用不同密码初始化，可能需要重置数据库（删除数据卷）。
+
+**用户**: 我们讨论一下算法如何做，需要连接大的llm api，此外还有海报模板库、文字编辑和样式调整、图片上传和处理、多格式导出这些功能
+
+**cursor auto**: 创建了 ALGORITHM_IMPLEMENTATION.md 详细实现方案文档。主要内容：1) LLM API 集成：支持 OpenAI、国内 API（通义千问、文心一言等）、开源模型自部署三种方案；2) 海报模板库：数据库存储模板配置，JSON 格式定义模板结构和元素；3) 文字编辑和样式调整：前端 Canvas 实现拖拽编辑，后端保存结构化数据；4) 图片上传和处理：支持对象存储（OSS/COS/S3），使用 Pillow 进行图片处理；5) 多格式导出：支持 PNG/JPEG/PDF/SVG，使用 reportlab 生成 PDF。提供了技术栈建议、实现优先级和成本估算。
+
+**用户**: 我们先用国内的api，我会准备api_key，你先开发所有的功能，另外，在docker里，如果监测到没有api_key或者api失效了（即call llm 的health连不上），那么直接转成dummy output
+
+**cursor auto**: 完成了算法服务的完整实现。1) LLM 服务模块（llm_service.py）：支持通义千问（dashscope）、智谱AI（zhipu）、百度文心一言（baidu）三种国内 API，包含健康检查功能；2) 模板服务模块（template_service.py）：内置3个默认模板（活动海报-竖版、产品海报-横版、节日海报-方形），支持模板列表和详情查询；3) 海报渲染模块（poster_renderer.py）：使用 Pillow 渲染海报，支持 PNG/JPEG 格式，支持渐变背景、文字、图片元素；4) 图片处理模块（image_service.py）：支持图片上传、压缩、格式转换；5) 主应用（app.py）：实现了所有 API 端点（生成、模板、上传、更新、导出），添加了自动降级机制：如果 LLM API 不可用（无 API key 或健康检查失败），自动降级到 dummy 模式返回占位符海报；6) 更新了 docker-compose.yml，添加了 LLM 相关环境变量和存储卷；7) 创建了 .env.example 和 README.md 说明文档。所有功能已实现，支持健康检查和自动降级。

@@ -124,11 +124,28 @@ router.get('/:threadId', async (req, res) => {
       [threadId]
     );
 
-    // 获取主题关联的海报
+    // 获取主题关联的海报（包含 conversation_id 用于前端关联）
     const posters = await query(
-      'SELECT id, prompt, poster_url, poster_data, created_at FROM posters WHERE conversation_id IN (SELECT id FROM conversations WHERE thread_id = $1) ORDER BY created_at ASC',
+      'SELECT id, conversation_id, prompt, poster_url, poster_data, created_at FROM posters WHERE conversation_id IN (SELECT id FROM conversations WHERE thread_id = $1) ORDER BY created_at ASC',
       [threadId]
     );
+
+    // 转换 poster_url 为后端代理路径
+    const convertPosterUrl = (url) => {
+      if (!url) return url;
+      if (url.startsWith('/api/poster/') && url.includes('/image')) {
+        const posterIdMatch = url.match(/\/api\/poster\/([^\/]+)\/image/);
+        if (posterIdMatch) {
+          return `/api/poster/image/${posterIdMatch[1]}`;
+        }
+      }
+      return url;
+    };
+
+    const convertedPosters = posters.rows.map(poster => ({
+      ...poster,
+      poster_url: convertPosterUrl(poster.poster_url)
+    }));
 
     res.json({
       thread: {
@@ -136,7 +153,7 @@ router.get('/:threadId', async (req, res) => {
         title: threadCheck.rows[0].title
       },
       conversations: conversations.rows,
-      posters: posters.rows
+      posters: convertedPosters
     });
   } catch (error) {
     console.error('Get thread detail error:', error);

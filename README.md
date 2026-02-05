@@ -21,51 +21,68 @@
 
 ### 前置要求
 
-- Node.js (v16+)
-- npm
-- Docker 和 Docker Compose
+- **全容器化**：仅需 Docker 和 Docker Compose
+- **本地开发**：Node.js (v16+)、npm、Docker 和 Docker Compose
 
-### 启动步骤
+---
 
-1. **启动 Docker 服务**（数据库和算法）
+### 方式一：全容器化运行（推荐）
+
+前端、后端、数据库、算法全部用 Docker 跑，一条命令起整站：
+
+```bash
+# 建议先设置生产用密钥（可选，不设则用默认值）
+export DB_PASSWORD=poster_password
+export JWT_SECRET=your-very-strong-random-secret-at-least-32-chars
+
+docker-compose up -d
+```
+
+等待约 30–60 秒（首次会构建 frontend/backend/algorithm 镜像），然后访问：
+
+- **应用入口**：http://localhost:3000（前端由 nginx 提供，/api 自动代理到后端）
+
+若遇 `KeyError: 'ContainerConfig'`，见下方故障排查。
+
+---
+
+### 方式二：本地开发（前后端本机跑，仅数据库与算法用 Docker）
+
+1. **启动 Docker 服务**（数据库 + 算法）
    ```bash
-   docker-compose up -d
-   ```
-   
-   等待服务启动完成（约 30 秒），检查状态：
-   ```bash
-   docker-compose ps
+   docker-compose up -d database algorithm
    ```
 
-2. **配置后端环境变量**
+2. **配置并启动后端**
    ```bash
    cd backend
-   # 创建 .env 文件，参考 backend/README.md 或 SECURITY.md
-   npm install
-   npm run dev
+   # 创建 .env，参考 SECURITY.md（DB_PASSWORD、JWT_SECRET 等）
+   npm install && npm run dev
    ```
 
-3. **启动前端应用**
+3. **启动前端**
    ```bash
    cd frontend
-   npm install
-   npm run dev
+   npm install && npm run dev
    ```
 
-4. **访问应用**
-   - 前端：http://localhost:3000
-   - 后端：http://localhost:3001
+4. **访问**：前端 http://localhost:3000，后端 http://localhost:3001
 
 ## 📦 Docker Compose 配置说明
 
 ### 默认配置
 
-项目使用 `docker-compose.yml` 定义服务配置：
-- **数据库服务**：PostgreSQL 15，端口 5432
-  - 默认数据库名：`poster_db`
-  - 默认用户名：`poster_user`
-  - 默认密码：`poster_password`（从环境变量 `DB_PASSWORD` 读取，未设置时使用默认值）
-- **算法服务**：Python Flask，端口 8000
+`docker-compose.yml` 包含四个服务：
+
+| 服务 | 说明 | 端口 |
+|------|------|------|
+| **database** | PostgreSQL 15 | 5432 |
+| **backend** | Node.js Express（需 `DB_PASSWORD`、`JWT_SECRET` 等环境变量） | 3001 |
+| **algorithm** | Python Flask（LLM、海报渲染） | 8000 |
+| **frontend** | Nginx 静态站 + /api 反代到 backend | 3000→80 |
+
+- 数据库默认密码：`poster_password`（由 `DB_PASSWORD` 控制）
+- 后端默认 `JWT_SECRET=change-me-in-production-min-32-chars`，生产务必通过环境变量覆盖
 
 ### 自定义密码配置
 
@@ -76,6 +93,12 @@
 3. 在 `backend/.env` 中设置相同的 `DB_PASSWORD`
 
 详细说明见 [SECURITY.md](./SECURITY.md)。
+
+### 故障排查
+
+- **docker-compose up 报错 `KeyError: 'ContainerConfig'`**：先删容器再起，例如 `docker-compose rm -f algorithm backend frontend` 后重新 `docker-compose up -d`。
+- **数据库连接失败**：确保环境变量 `DB_PASSWORD` 与数据库一致（默认 `poster_password`）。
+- **海报图不显示**：确认 algorithm 已启动；新生成一张海报再试；查看 backend 日志。
 
 ## ✨ 已实现功能
 
@@ -106,14 +129,18 @@
 
 ```
 vibe-coding-demo-poster-generation/
-├── frontend/          # 前端应用
-├── backend/           # 后端服务
-├── algorithm/         # 算法模块
-├── docker-compose.yml # Docker 配置
-├── process/
-│   └── DEV_LOG.md     # 开发进度与讨论记录（合并）
+├── frontend/           # 前端（Dockerfile：构建 + nginx，代理 /api 到 backend）
+│   ├── Dockerfile
+│   └── nginx.conf
+├── backend/            # 后端（Dockerfile：Node 生产运行）
+│   └── Dockerfile
+├── algorithm/          # 算法（Dockerfile：Flask + 中文字体）
+├── scripts/pack.sh     # 打包脚本
+├── docker-compose.yml  # 四服务：database、backend、algorithm、frontend
+├── process/DEV_LOG.md
 ├── README.md
-└── SECURITY.md        # 安全与部署说明
+├── SECURITY.md
+└── 打包与使用指引.md
 ```
 
 ## 📝 开发记录

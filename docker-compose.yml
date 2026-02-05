@@ -20,6 +20,31 @@ services:
     networks:
       - poster-network
 
+  # 后端服务（依赖数据库；连接算法服务用服务名 algorithm:8000）
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: poster-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_HOST=database
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-poster_db}
+      - DB_USER=${DB_USER:-poster_user}
+      - DB_PASSWORD=${DB_PASSWORD:-poster_password}
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production-min-32-chars}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - ALGORITHM_SERVICE_URL=http://algorithm:8000
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - poster-network
+
   # 算法服务
   algorithm:
     build:
@@ -48,6 +73,19 @@ services:
     depends_on:
       database:
         condition: service_healthy
+
+  # 前端服务（nginx 提供静态资源并代理 /api 到 backend）
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: poster-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - poster-network
 
 volumes:
   postgres_data:

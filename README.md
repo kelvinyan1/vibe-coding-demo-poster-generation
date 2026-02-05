@@ -143,6 +143,26 @@ vibe-coding-demo-poster-generation/
 └── 打包与使用指引.md
 ```
 
+## 📘 各模块说明（合并）
+
+### 后端（backend）
+
+- **本地运行**：`npm install` → 创建 `.env`（见 [SECURITY.md](./SECURITY.md)）→ `npm run dev` 或 `npm start`。
+- **数据库迁移**：若表结构有更新，执行 `node src/config/migrate-db.js` 或执行 `src/config/db-migration.sql`。
+- **API**：认证 `POST /api/auth/register`、`POST /api/auth/login`；主题 `GET/POST /api/thread/list|create`、`GET/PUT/DELETE /api/thread/:id`；对话 `POST /api/conversation/new`；海报 `POST /api/poster/generate`、`GET /api/poster/list`；健康 `GET /health`。
+
+### 前端（frontend）
+
+- **本地运行**：`npm install` → `npm run dev`，访问 http://localhost:3000。
+- **技术栈**：React 18 + Vite + React Router + Axios。功能：登录/注册、多主题对话、海报生成与预览、对话历史。
+
+### 算法（algorithm）
+
+- **环境变量**：`LLM_PROVIDER`（dashscope/zhipu/baidu）、`LLM_API_KEY`、`LLM_MODEL`（如 qwen-turbo）。无 key 或健康检查失败时自动降级为 dummy。
+- **运行**：本地 `python app.py`；生产 `docker-compose up algorithm`。
+- **API**：`GET /health`；`POST /generate`（body: `{"prompt":"..."}`）；`GET /templates`、`GET /templates/<id>`；`POST /upload/image`；`GET/PUT /poster/<id>`、`GET /poster/<id>/image`、`POST /poster/<id>/export`（format: png/jpeg/pdf）。
+- **设计**：用户输入 → LLM 生成 JSON 方案 → 选模板 → Pillow 渲染 → 持久化（POSTERS_DIR/UPLOADS_DIR）。扩展见 algorithm 目录内注释或 process/DEV_LOG。
+
 ## 📝 开发记录
 
 开发进度与讨论记录见 [process/DEV_LOG.md](./process/DEV_LOG.md)。

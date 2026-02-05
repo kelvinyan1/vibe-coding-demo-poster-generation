@@ -45,6 +45,7 @@
 - **2026/02/01**：初始化、架构、核心功能（DB/后端/前端/算法 dummy）、登录跳转修复、多主题对话、主题创建修复
 - **2026/02/02**：算法优化——模板应用 LLM elements、渐变条带优化、海报/图片磁盘持久化（uuid、_safe_id）
 - **2026/02/02 后续**：① 前端海报图不显示 → PosterImage 用带 token 的 api 拉 blob 再显示，外部 URL（dummy）直接 img src；② 刷新后图片加载失败 → 后端存 conversations.response 时用代理路径 finalPosterUrl，前端 normalizePosterUrl 兼容旧格式；③ 无论怎么输入海报都一样 → LLM system prompt 强调根据用户输入写文案、禁止占位，兜底用 prompt 作 title、占位时按 prompt hash 轮换模板；④ 海报中文乱码/方框 → Dockerfile 安装 fonts-wqy-zenhei + fontconfig + fc-cache，poster_renderer 使用正确路径（wenquanyi/wqy-zenhei）、.ttc 传 index=0、支持 POSTER_FONT_PATH；⑤ docker-compose 报错 ContainerConfig → 先 docker-compose rm -f algorithm 或按名删容器再 up，README 故障排查已补充
+- **近期**：前端与后端容器化（frontend Dockerfile + nginx 代理 /api，backend Dockerfile），docker-compose 四服务；README 合并：后端/前端/算法说明并入根 README「各模块说明」，子目录 README 改为简短指向根目录
 
 ---
 
@@ -106,3 +107,7 @@
 - **cursor auto**：旧版 docker-compose 重建容器兼容性问题；先 docker-compose rm -f algorithm 或按名删容器再 up，README 故障排查已加。
 - **用户**：记得记录 process/。
 - **cursor auto**：已更新 process/DEV_LOG.md（更新记录摘要 + 2026/02/02 后续讨论）。
+- **用户**：弄一个前端容器，后端怎么弄好。
+- **cursor auto**：前端 Dockerfile（Node 构建 + nginx 提供静态并代理 /api 到 backend）、后端 Dockerfile（Node 生产），docker-compose 增加 frontend、backend 服务，README 补充全容器化运行与故障排查。
+- **用户**：顺便处理所有 README，能合并就合并，更新 process/。
+- **cursor auto**：后端/前端/算法三份 README 内容合并至根 README「各模块说明」；backend、frontend、algorithm 下 README 改为 1～2 行指向根 README。已更新 process/DEV_LOG 更新记录摘要。

@@ -38,11 +38,11 @@ export JWT_SECRET=your-very-strong-random-secret-at-least-32-chars
 docker-compose up -d
 ```
 
-等待约 30–60 秒（首次会构建 frontend/backend/algorithm 镜像），然后访问：
+等待约 30–60 秒（首次会构建 frontend/backend/algorithm 镜像）。构建完成后在浏览器打开下方地址验证：
 
 - **应用入口**：http://localhost:3000（前端由 nginx 提供，/api 自动代理到后端）
 
-若遇 `KeyError: 'ContainerConfig'`，见下方故障排查。
+若超过 60 秒仍无法访问或报错，请查看下方故障排查。
 
 ---
 
@@ -96,8 +96,16 @@ docker-compose up -d
 
 ### 故障排查
 
+**Docker 相关**
+
 - **docker-compose up 报错 `KeyError: 'ContainerConfig'`**：先删容器再起，例如 `docker-compose rm -f algorithm backend frontend` 后重新 `docker-compose up -d`。
+
+**数据库相关**
+
 - **数据库连接失败**：确保环境变量 `DB_PASSWORD` 与数据库一致（默认 `poster_password`）。
+
+**前端 / 算法相关**
+
 - **海报图不显示**：确认 algorithm 已启动；新生成一张海报再试；查看 backend 日志。
 
 ## ✨ 已实现功能
@@ -139,8 +147,7 @@ vibe-coding-demo-poster-generation/
 ├── docker-compose.yml  # 四服务：database、backend、algorithm、frontend
 ├── process/DEV_LOG.md
 ├── README.md
-├── SECURITY.md
-└── 打包与使用指引.md
+└── SECURITY.md
 ```
 
 ## 📘 各模块说明（合并）
@@ -149,7 +156,18 @@ vibe-coding-demo-poster-generation/
 
 - **本地运行**：`npm install` → 创建 `.env`（见 [SECURITY.md](./SECURITY.md)）→ `npm run dev` 或 `npm start`。
 - **数据库迁移**：若表结构有更新，执行 `node src/config/migrate-db.js` 或执行 `src/config/db-migration.sql`。
-- **API**：认证 `POST /api/auth/register`、`POST /api/auth/login`；主题 `GET/POST /api/thread/list|create`、`GET/PUT/DELETE /api/thread/:id`；对话 `POST /api/conversation/new`；海报 `POST /api/poster/generate`、`GET /api/poster/list`；健康 `GET /health`。
+- **API 速查**：
+
+| 分类 | 方法 | 路径 | 说明 |
+|------|------|------|------|
+| 认证 | POST | `/api/auth/register` | 注册 |
+| 认证 | POST | `/api/auth/login` | 登录 |
+| 主题 | GET / POST | `/api/thread/list`、`/api/thread/create` | 列表、创建 |
+| 主题 | GET / PUT / DELETE | `/api/thread/:id` | 查询、更新、删除 |
+| 对话 | POST | `/api/conversation/new` | 新对话 |
+| 海报 | POST | `/api/poster/generate` | 生成海报 |
+| 海报 | GET | `/api/poster/list` | 海报列表 |
+| 健康 | GET | `/health` | 健康检查 |
 
 ### 前端（frontend）
 
@@ -160,7 +178,18 @@ vibe-coding-demo-poster-generation/
 
 - **环境变量**：`LLM_PROVIDER`（dashscope/zhipu/baidu）、`LLM_API_KEY`、`LLM_MODEL`（如 qwen-turbo）。无 key 或健康检查失败时自动降级为 dummy。
 - **运行**：本地 `python app.py`；生产 `docker-compose up algorithm`。
-- **API**：`GET /health`；`POST /generate`（body: `{"prompt":"..."}`）；`GET /templates`、`GET /templates/<id>`；`POST /upload/image`；`GET/PUT /poster/<id>`、`GET /poster/<id>/image`、`POST /poster/<id>/export`（format: png/jpeg/pdf）。
+- **API 速查**：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/health` | 健康检查 |
+| POST | `/generate` | 生成设计，body: `{"prompt":"..."}` |
+| GET | `/templates`、`/templates/<id>` | 模板列表、单个模板 |
+| POST | `/upload/image` | 上传图片 |
+| GET / PUT | `/poster/<id>` | 查询、更新海报 |
+| GET | `/poster/<id>/image` | 海报图片 |
+| POST | `/poster/<id>/export` | 导出，format: png / jpeg / pdf |
+
 - **设计**：用户输入 → LLM 生成 JSON 方案 → 选模板 → Pillow 渲染 → 持久化（POSTERS_DIR/UPLOADS_DIR）。扩展见 algorithm 目录内注释或 process/DEV_LOG。
 
 ## 📝 开发记录
@@ -169,7 +198,7 @@ vibe-coding-demo-poster-generation/
 
 ## 📄 License
 
-待定
+待定（开源前将确定并注明）
 
 ---
 

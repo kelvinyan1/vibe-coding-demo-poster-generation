@@ -122,3 +122,8 @@ Docker Compose 读取环境变量的顺序：
 - ⚠️ 生产环境必须使用强密码
 - ⚠️ 不要将密码直接写在 `docker-compose.yml` 中
 
+### JWT 与算法服务密钥
+
+- **JWT_SECRET**：生产环境必须使用至少 32 字符的强随机字符串，否则 token 易被伪造。生成方式见上方 `.env` 示例中的注释（`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`）。
+- **算法服务 LLM_API_KEY**：通义、智谱等 API Key 仅通过环境变量（如 `LLM_API_KEY`）配置，不要写进代码或提交到 Git。无 key 时算法服务会自动降级为 dummy 模式。
+
